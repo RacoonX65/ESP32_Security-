@@ -5,7 +5,7 @@ A comprehensive IoT security monitoring system built with ESP32 microcontrollers
 ![ESP32 Security System](https://img.shields.io/badge/ESP32-Security%20System-blue?style=for-the-badge&logo=espressif)
 ![Next.js](https://img.shields.io/badge/Next.js-16.0-black?style=for-the-badge&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript)
-![Supabase](https://img.shields.io/badge/Supabase-Database-green?style=for-the-badge&logo=supabase)
+![Firebase](https://img.shields.io/badge/Firebase-Database-orange?style=for-the-badge&logo=firebase)
 
 ## 🚀 Features
 
@@ -23,7 +23,7 @@ A comprehensive IoT security monitoring system built with ESP32 microcontrollers
 - **Real-time Updates**: Live data synchronization using SWR
 
 ### Backend Features
-- **Supabase Integration**: Real-time database with PostgreSQL
+- **Firebase Integration**: Real-time database with NoSQL
 - **Event Logging**: Automatic motion event storage with timestamps
 - **API Endpoints**: RESTful API for motion event management
 - **Database Indexing**: Optimized queries for fast data retrieval
@@ -40,7 +40,7 @@ A comprehensive IoT security monitoring system built with ESP32 microcontrollers
 ### Software Requirements
 - Node.js 18+ and npm/pnpm
 - Arduino IDE 2.0+
-- Supabase account (free tier available)
+- Firebase account (free tier available)
 - WiFi network for ESP32 connectivity
 
 ## 🛠️ Installation
@@ -66,16 +66,21 @@ cp .env.example .env.local
 
 Configure your environment variables in `.env.local`:
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=https://your-project-default-rtdb.firebaseio.com
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 ```
 
 ### 3. Database Setup
 
-1. Create a new Supabase project
-2. Run the SQL script in `scripts/001_create_motion_events.sql` in your Supabase SQL editor
-3. Configure Row Level Security (RLS) policies as needed
+1. Create a new Firebase project at [Firebase Console](https://console.firebase.google.com/)
+2. Enable Realtime Database in your Firebase project
+3. Configure database rules for security (start with test mode for development)
+4. Copy your Firebase configuration from Project Settings
 
 ### 4. Hardware Setup
 
@@ -83,10 +88,13 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 1. Open `firmware/esp32-cam/esp32-cam.ino` in Arduino IDE
 2. Update WiFi credentials:
    ```cpp
-   const char* ssid = "YOUR_WIFI_SSID";
-   const char* password = "YOUR_WIFI_PASSWORD";
+   const char* ssid = "YOUR_HOTSPOT_NAME";
+   const char* password = "YOUR_HOTSPOT_PASSWORD";
    ```
-3. Configure your server endpoint for camera streaming
+3. Configure your Firebase Realtime Database URL:
+   ```cpp
+   const char* DATABASE_URL = "https://your-project-default-rtdb.firebaseio.com";
+   ```
 4. Upload to ESP32-CAM module
 
 #### ESP32 Motion Sensor Configuration
@@ -136,7 +144,7 @@ esp32-security/
 │   └── README.md         # Hardware setup guide
 ├── hooks/                # Custom React hooks
 ├── lib/                  # Utility libraries
-│   ├── supabase/         # Database configuration
+│   ├── supabase/         # Firebase configuration (legacy folder name)
 │   └── utils.ts          # Helper functions
 ├── public/               # Static assets
 ├── scripts/              # Database scripts
@@ -149,9 +157,13 @@ esp32-security/
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Yes |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key | Yes |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | Yes |
+| `NEXT_PUBLIC_FIREBASE_DATABASE_URL` | Firebase Realtime Database URL | Yes |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase API Key | Yes |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase Auth Domain | Yes |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase Project ID | Yes |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase Storage Bucket | Yes |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase Messaging Sender ID | Yes |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase App ID | Yes |
 
 ### ESP32 Configuration
 
@@ -166,7 +178,7 @@ Update the following in your firmware files:
 ### Motion Events
 - `GET /api/motion` - Retrieve motion events
 - `POST /api/motion` - Create new motion event
-- Real-time subscriptions via Supabase
+- Real-time subscriptions via Firebase
 
 ## 🎨 UI Components
 
@@ -235,7 +247,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Adjust sensitivity in firmware
 
 **Database Connection Issues:**
-- Verify Supabase credentials
+- Verify Firebase credentials
 - Check environment variables
 - Ensure database tables are created
 
@@ -249,7 +261,7 @@ For support and questions:
 ## 🙏 Acknowledgments
 
 - ESP32 community for excellent documentation
-- Supabase for real-time database capabilities
+- Firebase for real-time database capabilities
 - Radix UI for accessible component primitives
 - Next.js team for the amazing framework
 

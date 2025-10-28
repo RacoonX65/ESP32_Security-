@@ -2,6 +2,8 @@ import { Badge } from "@/components/ui/badge"
 import { Activity, Shield } from "lucide-react"
 import { CameraStream } from "@/components/camera-stream"
 import { MotionEvents } from "@/components/motion-events"
+import { TriggerStatus } from "@/components/trigger-status"
+import { NotificationSettings } from "@/components/notification-settings"
 
 export default function SecurityDashboard() {
   return (
@@ -28,11 +30,19 @@ export default function SecurityDashboard() {
 
       <main className="container mx-auto px-4 py-6">
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Camera feed section - will be populated in next task */}
+          {/* Camera feed section */}
           <CameraStream />
 
           {/* Motion events display with real-time updates */}
           <MotionEvents />
+          
+          {/* Trigger status and history tracking */}
+          <TriggerStatus />
+        </div>
+        
+        {/* Notification settings panel */}
+        <div className="mt-6">
+          <NotificationSettings />
         </div>
       </main>
     </div>

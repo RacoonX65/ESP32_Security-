@@ -1,18 +1,42 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Video, WifiOff, Settings } from "lucide-react"
+import { ref, onValue, off } from "firebase/database"
+import { database } from "@/lib/supabase/client"
 
 export function CameraStream() {
-  const [cameraUrl, setCameraUrl] = useState("http://192.168.1.100:81/stream")
+  const [cameraUrl, setCameraUrl] = useState("")
   const [isConnected, setIsConnected] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [tempUrl, setTempUrl] = useState(cameraUrl)
+  const [tempUrl, setTempUrl] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Listen for live URL updates from Firebase
+  useEffect(() => {
+    const liveUrlRef = ref(database, 'camera/live_url')
+    
+    const unsubscribe = onValue(liveUrlRef, (snapshot) => {
+      const url = snapshot.val()
+      if (url && typeof url === 'string') {
+        setCameraUrl(url)
+        setTempUrl(url)
+        setIsLoading(false)
+      } else {
+        setIsLoading(false)
+      }
+    }, (error) => {
+      console.error('Firebase error:', error)
+      setIsLoading(false)
+    })
+
+    return () => off(liveUrlRef, 'value', unsubscribe)
+  }, [])
 
   const handleUpdateUrl = () => {
     setCameraUrl(tempUrl)
@@ -77,7 +101,26 @@ export function CameraStream() {
         )}
 
         <div className="relative aspect-video rounded-lg bg-muted overflow-hidden border border-border">
-          {!isConnected && !showSettings ? (
+          {isLoading ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <div className="text-center">
+                <p className="font-medium">Connecting to ESP32-CAM</p>
+                <p className="text-sm">Fetching live stream URL...</p>
+              </div>
+            </div>
+          ) : !cameraUrl ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+              <WifiOff className="h-12 w-12" />
+              <div className="text-center">
+                <p className="font-medium">ESP32-CAM Not Available</p>
+                <p className="text-sm">Waiting for camera to come online...</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}>
+                Manual Configuration
+              </Button>
+            </div>
+          ) : !isConnected && !showSettings ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
               <WifiOff className="h-12 w-12" />
               <div className="text-center">
@@ -89,18 +132,20 @@ export function CameraStream() {
               </Button>
             </div>
           ) : null}
-          <img
-            src={cameraUrl || "/placeholder.svg"}
-            alt="ESP32-CAM Live Stream"
-            className={`h-full w-full object-cover ${!isConnected ? "hidden" : ""}`}
-            onError={handleImageError}
-            onLoad={handleImageLoad}
-          />
+          {cameraUrl && (
+            <img
+              src={cameraUrl}
+              alt="ESP32-CAM Live Stream"
+              className={`h-full w-full object-cover ${!isConnected ? "hidden" : ""}`}
+              onError={handleImageError}
+              onLoad={handleImageLoad}
+            />
+          )}
         </div>
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Stream: {cameraUrl}</span>
-          <span>MJPEG Format</span>
+          <span>Stream: {cameraUrl || "Waiting for ESP32-CAM..."}</span>
+          <span>{cameraUrl ? "MJPEG Format" : "Firebase Connected"}</span>
         </div>
       </CardContent>
     </Card>
