@@ -1,9 +1,10 @@
 import { Badge } from "@/components/ui/badge"
 import { Activity, Shield } from "lucide-react"
-import { CameraStream } from "@/components/camera-stream"
+import { SystemStatusCards } from "@/components/system-status-cards"
 import { MotionEvents } from "@/components/motion-events"
-import { TriggerStatus } from "@/components/trigger-status"
+import { SecurityControls } from "@/components/security-controls"
 import { NotificationSettings } from "@/components/notification-settings"
+import { SystemMonitoring } from "@/components/system-monitoring"
 
 export default function SecurityDashboard() {
   return (
@@ -28,22 +29,25 @@ export default function SecurityDashboard() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6">
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Camera feed section */}
-          <CameraStream />
+      <main className="container mx-auto px-4 py-6 space-y-6">
+        {/* System Status Overview */}
+        <SystemStatusCards />
 
+        <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
           {/* Motion events display with real-time updates */}
-          <MotionEvents />
+          <div className="xl:col-span-2">
+            <MotionEvents />
+          </div>
           
-          {/* Trigger status and history tracking */}
-          <TriggerStatus />
+          {/* Security controls and system monitoring */}
+          <div className="space-y-6">
+            <SecurityControls />
+            <SystemMonitoring />
+          </div>
         </div>
         
         {/* Notification settings panel */}
-        <div className="mt-6">
-          <NotificationSettings />
-        </div>
+        <NotificationSettings />
       </main>
     </div>
   )

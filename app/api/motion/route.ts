@@ -1,36 +1,42 @@
 import { database } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
-import { ref, push, get, query, orderByChild, limitToLast } from "firebase/database"
+import { ref, set, get, query, orderByChild, limitToLast } from "firebase/database"
 
-// POST endpoint for ESP32 to send motion events (optional - ESP32 now sends directly to Firebase)
+// POST endpoint for ESP32 to send alarm data
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sensor_location } = body
+    const { message, type, sensor_location, esp32_ip } = body
 
-    if (!sensor_location) {
-      return NextResponse.json({ error: "sensor_location is required" }, { status: 400 })
+    // Validate required fields
+    if (!message) {
+      return NextResponse.json({ error: "message is required" }, { status: 400 })
     }
 
-    const motionEventsRef = ref(database, 'motion_events')
-    const newEvent = {
-      sensor_location,
-      timestamp: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      motion_detected: true
-    }
+    // Update alarm data in Firebase (this will trigger the client-side listeners)
+    const alarmRef = ref(database, 'alarm')
+    await set(alarmRef, message)
 
-    const result = await push(motionEventsRef, newEvent)
+    // Update system status with heartbeat and ESP32 info
+    const systemRef = ref(database, 'system')
+    const systemUpdate = {
+      lastHeartbeat: new Date().toISOString(),
+      isOnline: true,
+      ...(esp32_ip && { esp32IP: esp32_ip }),
+      ...(sensor_location && { sensor_location })
+    }
+    
+    await set(systemRef, systemUpdate)
+
+    console.log(`[API] Received alarm from ESP32: ${message}`)
 
     return NextResponse.json({ 
       success: true, 
-      data: { 
-        id: result.key, 
-        ...newEvent 
-      } 
-    }, { status: 201 })
+      message: "Alarm data received and processed",
+      timestamp: new Date().toISOString()
+    }, { status: 200 })
   } catch (error) {
-    console.error("[Firebase] Error inserting motion event:", error)
+    console.error("[API] Error processing ESP32 alarm data:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

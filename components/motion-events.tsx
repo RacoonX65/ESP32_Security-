@@ -4,26 +4,21 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Activity, MapPin, Clock, Bell, BellOff } from "lucide-react"
+import { Activity, MapPin, Clock, Bell, BellOff, AlertTriangle, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ref, onValue, off } from "firebase/database"
-import { database } from "@/lib/supabase/client"
+import { firebaseService, MotionEvent, SystemStatus } from "@/lib/firebase-service"
 import { useNotifications } from "@/hooks/use-notifications"
-
-interface MotionEvent {
-  id: string
-  timestamp: string
-  sensor_location: string
-  created_at: string
-  motion_detected: boolean
-}
 
 export function MotionEvents() {
   const [events, setEvents] = useState<MotionEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [currentMotionStatus, setCurrentMotionStatus] = useState(false)
-  const [lastMotionTime, setLastMotionTime] = useState<string | null>(null)
+  const [systemStatus, setSystemStatus] = useState<SystemStatus>({
+    isOnline: false,
+    lastHeartbeat: '',
+    motionDetected: false,
+    systemArmed: true
+  })
   
   const { 
     permission, 
@@ -32,45 +27,29 @@ export function MotionEvents() {
     requestPermission 
   } = useNotifications()
 
-  // Listen for motion detection updates from Firebase
+  // Listen for motion events and system status from Firebase service
   useEffect(() => {
-    const motionRef = ref(database, 'camera/motion_detected')
+    setIsLoading(true)
     
-    const unsubscribe = onValue(motionRef, (snapshot) => {
-      const motionDetected = snapshot.val()
+    const unsubscribeEvents = firebaseService.subscribeToMotionEvents((newEvents) => {
+      setEvents(newEvents)
       setIsLoading(false)
       
-      if (typeof motionDetected === 'boolean') {
-        const previousStatus = currentMotionStatus
-        setCurrentMotionStatus(motionDetected)
-        
-        // Create a new event when motion is detected (transition from false to true)
-        if (motionDetected && !previousStatus) {
-          const currentTime = new Date().toISOString()
-          setLastMotionTime(currentTime)
-          
-          const newEvent: MotionEvent = {
-            id: Date.now().toString(),
-            timestamp: currentTime,
-            sensor_location: "ESP32-CAM Area",
-            created_at: currentTime,
-            motion_detected: true
-          }
-          
-          setEvents(prevEvents => [newEvent, ...prevEvents.slice(0, 49)]) // Keep last 50 events
-          
-          // Trigger notification
-          notifyMotionDetected("ESP32-CAM Area")
-        }
+      // Trigger notification for new motion detection events
+      if (newEvents.length > 0 && newEvents[0].type === 'motion_detected') {
+        notifyMotionDetected("ESP32-CAM Area")
       }
-    }, (error) => {
-      console.error('Firebase motion detection error:', error)
-      setError('Failed to connect to motion detection')
-      setIsLoading(false)
     })
 
-    return () => off(motionRef, 'value', unsubscribe)
-  }, [currentMotionStatus])
+    const unsubscribeStatus = firebaseService.subscribeToSystemStatus((status) => {
+      setSystemStatus(status)
+    })
+
+    return () => {
+      unsubscribeEvents()
+      unsubscribeStatus()
+    }
+  }, [])
 
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp)
@@ -93,20 +72,26 @@ export function MotionEvents() {
             Motion Events
           </CardTitle>
           <div className="flex items-center gap-2">
-            <Badge variant={currentMotionStatus ? "destructive" : "secondary"} className="gap-1">
-              {currentMotionStatus ? (
+            <Badge variant={systemStatus.motionDetected ? "destructive" : "secondary"} className="gap-1">
+              {systemStatus.motionDetected ? (
                 <>
-                  <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                  Motion Detected
+                  <AlertTriangle className="h-3 w-3 animate-pulse" />
+                  Motion Active
                 </>
               ) : (
                 <>
-                  <div className="h-2 w-2 rounded-full bg-green-500" />
-                  No Motion
+                  <CheckCircle className="h-3 w-3" />
+                  All Clear
                 </>
               )}
             </Badge>
             {events.length > 0 && <Badge variant="outline">{events.length}</Badge>}
+            
+            {/* System Status Indicator */}
+            <Badge variant={systemStatus.isOnline ? "default" : "destructive"} className="gap-1">
+              <div className={`h-2 w-2 rounded-full ${systemStatus.isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
+              {systemStatus.isOnline ? 'Online' : 'Offline'}
+            </Badge>
             
             {/* Notification Status & Control */}
             <Button
@@ -136,10 +121,10 @@ export function MotionEvents() {
           </div>
         </div>
         
-        {/* Last Motion Time Display */}
-        {lastMotionTime && (
+        {/* System Status Display */}
+        {systemStatus.lastHeartbeat && (
           <div className="text-xs text-muted-foreground mt-2">
-            Last motion: {formatTime(lastMotionTime)}
+            Last update: {formatTime(systemStatus.lastHeartbeat)}
           </div>
         )}
       </CardHeader>
@@ -175,13 +160,22 @@ export function MotionEvents() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2 flex-1">
-                      <div className="mt-0.5 rounded-full bg-accent/20 p-1.5">
-                        <Activity className="h-3.5 w-3.5 text-accent" />
+                      <div className={`mt-0.5 rounded-full p-1.5 ${
+                        event.type === 'motion_detected' ? 'bg-red-100 text-red-600' : 
+                        event.type === 'motion_cleared' ? 'bg-green-100 text-green-600' : 
+                        'bg-blue-100 text-blue-600'
+                      }`}>
+                        {event.type === 'motion_detected' ? (
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                        ) : event.type === 'motion_cleared' ? (
+                          <CheckCircle className="h-3.5 w-3.5" />
+                        ) : (
+                          <Activity className="h-3.5 w-3.5" />
+                        )}
                       </div>
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2">
-                          <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-sm font-medium">{event.sensor_location}</span>
+                          <span className="text-sm font-medium">{event.message}</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Clock className="h-3 w-3" />
@@ -189,8 +183,13 @@ export function MotionEvents() {
                         </div>
                       </div>
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      Motion
+                    <Badge 
+                      variant={event.type === 'motion_detected' ? "destructive" : 
+                               event.type === 'motion_cleared' ? "default" : "outline"} 
+                      className="text-xs"
+                    >
+                      {event.type === 'motion_detected' ? 'Alert' : 
+                       event.type === 'motion_cleared' ? 'Clear' : 'Event'}
                     </Badge>
                   </div>
                 </div>

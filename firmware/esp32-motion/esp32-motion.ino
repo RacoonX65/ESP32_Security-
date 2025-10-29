@@ -16,7 +16,8 @@ const char* ssid = "YOUR_WIFI_SSID";
 const char* password = "YOUR_WIFI_PASSWORD";
 
 // API endpoint - UPDATE THIS with your deployed URL
-const char* apiEndpoint = "https://your-app.vercel.app/api/motion";
+const char* apiEndpoint = "http://localhost:3000/api/motion";  // For development
+// const char* apiEndpoint = "https://your-app.vercel.app/api/motion";  // For production
 
 // Ultrasonic sensor pins
 const int trigPin = 5;
@@ -26,9 +27,12 @@ const int echoPin = 18;
 const int motionThreshold = 50;  // Distance change threshold in cm
 const int checkInterval = 1000;  // Check every 1 second
 const int cooldownPeriod = 5000; // 5 seconds between alerts
+const int heartbeatInterval = 30000; // Send heartbeat every 30 seconds
 
 long lastDistance = 0;
 unsigned long lastMotionTime = 0;
+unsigned long lastHeartbeatTime = 0;
+bool motionActive = false;
 String sensorLocation = "Front Door";  // UPDATE THIS for each sensor
 
 void setup() {
@@ -84,10 +88,20 @@ void sendMotionAlert() {
     http.begin(apiEndpoint);
     http.addHeader("Content-Type", "application/json");
     
-    // Create JSON payload
-    String payload = "{\"sensor_location\":\"" + sensorLocation + "\"}";
+    // Create alarm message in the format expected by Firebase service
+    String alarmMessage = "🚨 Motion detected in " + sensorLocation + " at " + String(millis()/1000) + "s";
+    
+    // Create JSON payload with alarm data
+    String payload = "{";
+    payload += "\"message\":\"" + alarmMessage + "\",";
+    payload += "\"type\":\"motion_detected\",";
+    payload += "\"sensor_location\":\"" + sensorLocation + "\",";
+    payload += "\"esp32_ip\":\"" + WiFi.localIP().toString() + "\"";
+    payload += "}";
     
     Serial.println("Sending motion alert...");
+    Serial.println("Payload: " + payload);
+    
     int httpResponseCode = http.POST(payload);
     
     if (httpResponseCode > 0) {
@@ -107,8 +121,78 @@ void sendMotionAlert() {
   }
 }
 
+void sendMotionCleared() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    
+    http.begin(apiEndpoint);
+    http.addHeader("Content-Type", "application/json");
+    
+    // Create clear message
+    String clearMessage = "✅ Motion cleared in " + sensorLocation + " at " + String(millis()/1000) + "s";
+    
+    // Create JSON payload
+    String payload = "{";
+    payload += "\"message\":\"" + clearMessage + "\",";
+    payload += "\"type\":\"motion_cleared\",";
+    payload += "\"sensor_location\":\"" + sensorLocation + "\",";
+    payload += "\"esp32_ip\":\"" + WiFi.localIP().toString() + "\"";
+    payload += "}";
+    
+    Serial.println("Sending motion cleared...");
+    
+    int httpResponseCode = http.POST(payload);
+    
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.print("Clear response code: ");
+      Serial.println(httpResponseCode);
+    }
+    
+    http.end();
+  }
+}
+
+void sendHeartbeat() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    
+    http.begin(apiEndpoint);
+    http.addHeader("Content-Type", "application/json");
+    
+    // Create heartbeat message
+    String heartbeatMessage = "💓 System heartbeat from " + sensorLocation;
+    
+    // Create JSON payload
+    String payload = "{";
+    payload += "\"message\":\"" + heartbeatMessage + "\",";
+    payload += "\"type\":\"heartbeat\",";
+    payload += "\"sensor_location\":\"" + sensorLocation + "\",";
+    payload += "\"esp32_ip\":\"" + WiFi.localIP().toString() + "\"";
+    payload += "}";
+    
+    int httpResponseCode = http.POST(payload);
+    
+    if (httpResponseCode > 0) {
+      Serial.println("Heartbeat sent successfully");
+    } else {
+      Serial.print("Heartbeat error: ");
+      Serial.println(httpResponseCode);
+    }
+    
+    http.end();
+  }
+}
+
 void loop() {
+  unsigned long currentTime = millis();
   long currentDistance = getDistance();
+  
+  // Send heartbeat periodically
+  if (currentTime - lastHeartbeatTime > heartbeatInterval) {
+    sendHeartbeat();
+    lastHeartbeatTime = currentTime;
+  }
   
   // Check if distance is valid (sensor returns 0 on error)
   if (currentDistance > 0 && currentDistance < 400) {
@@ -116,15 +200,21 @@ void loop() {
     
     // Check if motion detected and cooldown period has passed
     if (distanceChange > motionThreshold) {
-      unsigned long currentTime = millis();
-      
       if (currentTime - lastMotionTime > cooldownPeriod) {
         Serial.print("Motion detected! Distance change: ");
         Serial.print(distanceChange);
         Serial.println(" cm");
         
         sendMotionAlert();
+        motionActive = true;
         lastMotionTime = currentTime;
+      }
+    } else {
+      // Check if motion was active and now cleared
+      if (motionActive && (currentTime - lastMotionTime > cooldownPeriod)) {
+        Serial.println("Motion cleared");
+        sendMotionCleared();
+        motionActive = false;
       }
     }
     
